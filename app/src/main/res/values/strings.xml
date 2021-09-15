@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">remoteInputClient</string>
+    <string name="connect_button">set ip</string>
+    <string name="backspace"><![CDATA[<-]]></string>
+    <string name="windows_char">#</string>
+    <string name="volume_up"><![CDATA[>]]></string>
+    <string name="volume_down"><![CDATA[<]]></string>
+</resources>
