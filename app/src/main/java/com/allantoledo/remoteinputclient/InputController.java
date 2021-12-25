@@ -29,20 +29,19 @@ public class InputController {
         this.port = port;
     }
 
-    public void setFirstTouch(int x, int y) {
-        firstTouch = System.currentTimeMillis();
+    public void resetMove(int x, int y) {
         actualX = x;
         actualY = y;
         lastTouchX = actualX;
         lastTouchY = actualY;
     }
 
+    public void setFirstTouch() {
+        firstTouch = System.currentTimeMillis();
+    }
+
     public void setLastTouch(int x, int y) {
         long lastTouch = System.currentTimeMillis();
-        actualX = x;
-        actualY = y;
-        lastTouchX = actualX;
-        lastTouchY = actualY;
 
         if ((lastTouch - firstTouch) < 150) {
             leftClick = true;
@@ -74,7 +73,8 @@ public class InputController {
         lastTouchY = actualY;
         actualX = x;
         actualY = y;
-        sendData();
+        if (lastTouchX != actualX || lastTouchY != actualY)
+            sendData();
     }
 
     public byte[] getData() {
@@ -106,8 +106,8 @@ public class InputController {
         lastScrollY = scrollY = 0;
     }
 
-    public void sendData(){
-        if(address == null)
+    public void sendData() {
+        if (address == null)
             return;
 
         byte[] buf = getData();

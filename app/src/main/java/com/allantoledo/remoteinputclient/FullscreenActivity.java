@@ -3,7 +3,12 @@ package com.allantoledo.remoteinputclient;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Context;
 import android.content.SharedPreferences;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventCallback;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.text.InputType;
 import android.text.method.DigitsKeyListener;
@@ -19,8 +24,11 @@ import java.net.UnknownHostException;
 
 public class FullscreenActivity extends AppCompatActivity {
 
-    InputController controller;
+    InputController input;
+    GestureController gesture;
     private final String KEY = "ipRemotePreferences";
+    private SensorManager sensorManager;
+    private Sensor sensor;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,9 +40,14 @@ public class FullscreenActivity extends AppCompatActivity {
             actionBar.hide();
         }
 
-        controller = new InputController();
+        input = new InputController();
+        gesture = new GestureController(input);
+
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        sensor = sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);
 
         Button connectButton = findViewById(R.id.connect_button);
+        Button gestureButton = findViewById(R.id.gesture_button);
         EditText inputAddress = findViewById(R.id.input_address);
         View touchpad = findViewById(R.id.touchpad);
         Button leftClick = findViewById(R.id.left_mouse);
@@ -49,14 +62,14 @@ public class FullscreenActivity extends AppCompatActivity {
         inputAddress.setKeyListener(DigitsKeyListener.getInstance("0123456789."));
         inputAddress.setText(preferences.getString(KEY, ""));
 
-        rightClick.setOnClickListener(v -> controller.setRightClick());
-        leftClick.setOnClickListener(v -> controller.setLeftClick());
+        rightClick.setOnClickListener(v -> input.setRightClick());
+        leftClick.setOnClickListener(v -> input.setLeftClick());
 
         connectButton.setOnClickListener(v -> {
             inputAddress.clearFocus();
             try {
                 String ip = inputAddress.getText().toString();
-                controller.setAddress(InetAddress.getByName(ip), 3000);
+                input.setAddress(InetAddress.getByName(ip), 3000);
                 SharedPreferences.Editor editor = preferences.edit();
                 editor.putString(KEY, ip);
                 editor.apply();
@@ -66,34 +79,42 @@ public class FullscreenActivity extends AppCompatActivity {
             }
         });
 
+        gestureButton.setOnClickListener(v -> {
+            gesture.setActivated(!gesture.isActivated());
+            if (gesture.isActivated())
+                gestureButton.setText(R.string.gesture_on);
+            else
+                gestureButton.setText(R.string.gesture_off);
+        });
+
         scrollbar.setOnTouchListener((v, event) -> {
             String DEBUG_TAG = "MOTIONEVENT";
             int action = event.getAction();
             switch (action) {
                 case (MotionEvent.ACTION_DOWN):
                     Log.v(DEBUG_TAG, "Action was DOWN");
-                    controller.setFirstScrollTouch((int) event.getY());
+                    input.setFirstScrollTouch((int) event.getY());
                     return true;
                 case (MotionEvent.ACTION_MOVE):
                     Log.v(DEBUG_TAG, "Action was MOVE");
-                    controller.moveScroll((int) event.getY());
+                    input.moveScroll((int) event.getY());
                     return true;
                 case (MotionEvent.ACTION_UP):
                     Log.v(DEBUG_TAG, "Action was UP");
-                    controller.setLastScrollTouch();
+                    input.setLastScrollTouch();
                     v.performClick();
                     return true;
                 case (MotionEvent.ACTION_CANCEL):
                     Log.v(DEBUG_TAG, "Action was CANCEL");
-                    controller.setLastScrollTouch();
+                    input.setLastScrollTouch();
                     return true;
                 case (MotionEvent.ACTION_OUTSIDE):
                     Log.v(DEBUG_TAG, "Movement occurred outside bounds " +
                             "of current screen element");
-                    controller.setLastScrollTouch();
+                    input.setLastScrollTouch();
                     return true;
                 default:
-                    controller.setLastScrollTouch();
+                    input.setLastScrollTouch();
                     return true;
             }
         });
@@ -103,25 +124,28 @@ public class FullscreenActivity extends AppCompatActivity {
             switch (action) {
                 case (MotionEvent.ACTION_DOWN):
                     Log.v(DEBUG_TAG, "Action was DOWN");
-                    controller.setFirstTouch((int) event.getX(), (int) event.getY());
+                    input.setFirstTouch();
+                    if(!gesture.isActivated())
+                        input.resetMove((int) event.getX(), (int) event.getY());
                     return true;
                 case (MotionEvent.ACTION_MOVE):
                     Log.v(DEBUG_TAG, "Action was MOVE");
-                    controller.moveTouch((int) event.getX(), (int) event.getY());
+                    if (!gesture.isActivated())
+                        input.moveTouch((int) event.getX(), (int) event.getY());
                     return true;
                 case (MotionEvent.ACTION_UP):
                     Log.v(DEBUG_TAG, "Action was UP");
-                    controller.setLastTouch((int) event.getX(), (int) event.getY());
+                    input.setLastTouch((int) event.getX(), (int) event.getY());
                     v.performClick();
                     return true;
                 case (MotionEvent.ACTION_CANCEL):
                     Log.v(DEBUG_TAG, "Action was CANCEL");
-                    controller.setLastTouch((int) event.getX(), (int) event.getY());
+                    input.setLastTouch((int) event.getX(), (int) event.getY());
                     return true;
                 case (MotionEvent.ACTION_OUTSIDE):
                     Log.v(DEBUG_TAG, "Movement occurred outside bounds " +
                             "of current screen element");
-                    controller.setLastTouch((int) event.getX(), (int) event.getY());
+                    input.setLastTouch((int) event.getX(), (int) event.getY());
                     return true;
                 default:
                     return true;
@@ -129,6 +153,23 @@ public class FullscreenActivity extends AppCompatActivity {
         });
 
         mapKeys();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (sensor != null) {
+            Log.v("sensor", "The sensor exist.");
+            sensorManager.registerListener(gesture, sensor, SensorManager.SENSOR_DELAY_GAME);
+        } else
+            Log.v("sensor", "The sensor not exist.");
+
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        sensorManager.unregisterListener(gesture);
     }
 
     private void mapKeys() {
@@ -168,60 +209,60 @@ public class FullscreenActivity extends AppCompatActivity {
         Button n8_button = findViewById(R.id.n8_button);
         Button n9_button = findViewById(R.id.n9_button);
         Button n0_button = findViewById(R.id.n0_button);
-        n1_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x31));
-        n2_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x32));
-        n3_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x33));
-        n4_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x34));
-        n5_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x35));
-        n6_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x36));
-        n7_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x37));
-        n8_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x38));
-        n9_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x39));
-        n0_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x30));
-        a_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x41));
-        b_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x42));
-        c_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x43));
-        d_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x44));
-        e_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x45));
-        f_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x46));
-        g_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x47));
-        h_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x48));
-        i_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x49));
-        j_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x4a));
-        k_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x4b));
-        l_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x4c));
-        m_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x4d));
-        n_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x4e));
-        o_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x4f));
-        p_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x50));
-        q_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x51));
-        r_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x52));
-        s_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x53));
-        t_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x54));
-        u_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x55));
-        v_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x56));
-        w_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x57));
-        x_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x58));
-        y_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x59));
-        z_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x5A));
+        n1_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x31));
+        n2_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x32));
+        n3_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x33));
+        n4_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x34));
+        n5_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x35));
+        n6_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x36));
+        n7_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x37));
+        n8_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x38));
+        n9_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x39));
+        n0_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x30));
+        a_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x41));
+        b_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x42));
+        c_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x43));
+        d_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x44));
+        e_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x45));
+        f_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x46));
+        g_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x47));
+        h_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x48));
+        i_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x49));
+        j_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x4a));
+        k_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x4b));
+        l_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x4c));
+        m_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x4d));
+        n_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x4e));
+        o_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x4f));
+        p_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x50));
+        q_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x51));
+        r_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x52));
+        s_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x53));
+        t_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x54));
+        u_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x55));
+        v_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x56));
+        w_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x57));
+        x_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x58));
+        y_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x59));
+        z_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x5A));
 
         Button windows_button = findViewById(R.id.windows_button);
-        windows_button.setOnClickListener(v -> controller.setKeyPressed((byte) -1));
+        windows_button.setOnClickListener(v -> input.setKeyPressed((byte) -1));
 
         Button volume_up = findViewById(R.id.volume_up);
-        volume_up.setOnClickListener(v -> controller.setKeyPressed((byte) -3));
+        volume_up.setOnClickListener(v -> input.setKeyPressed((byte) -3));
 
         Button volume_down = findViewById(R.id.volume_down);
-        volume_down.setOnClickListener(v -> controller.setKeyPressed((byte) -4));
+        volume_down.setOnClickListener(v -> input.setKeyPressed((byte) -4));
 
         Button space_button = findViewById(R.id.space_button);
-        space_button.setOnClickListener(v -> controller.setKeyPressed((byte) 0x20));
+        space_button.setOnClickListener(v -> input.setKeyPressed((byte) 0x20));
 
         Button enter_button = findViewById(R.id.enter_button);
-        enter_button.setOnClickListener(v -> controller.setKeyPressed((byte) '\n'));
+        enter_button.setOnClickListener(v -> input.setKeyPressed((byte) '\n'));
 
         Button backspace_button = findViewById(R.id.back_button);
-        backspace_button.setOnClickListener(v -> controller.setKeyPressed((byte) '\b'));
+        backspace_button.setOnClickListener(v -> input.setKeyPressed((byte) '\b'));
     }
 
 }
