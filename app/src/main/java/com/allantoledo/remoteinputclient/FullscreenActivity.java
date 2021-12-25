@@ -5,6 +5,8 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.text.InputType;
+import android.text.method.DigitsKeyListener;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -42,6 +44,9 @@ public class FullscreenActivity extends AppCompatActivity {
 
         SharedPreferences preferences = getPreferences(MODE_PRIVATE);
 
+        inputAddress.setInputType(InputType.TYPE_CLASS_NUMBER);
+        inputAddress.setInputType(InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        inputAddress.setKeyListener(DigitsKeyListener.getInstance("0123456789."));
         inputAddress.setText(preferences.getString(KEY, ""));
 
         rightClick.setOnClickListener(v -> controller.setRightClick());
