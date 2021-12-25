@@ -81,10 +81,14 @@ public class FullscreenActivity extends AppCompatActivity {
 
         gestureButton.setOnClickListener(v -> {
             gesture.setActivated(!gesture.isActivated());
-            if (gesture.isActivated())
+            if (gesture.isActivated()){
+                registerGestureListener();
                 gestureButton.setText(R.string.gesture_on);
-            else
+            }
+            else{
+                unregisterGestureListener();
                 gestureButton.setText(R.string.gesture_off);
+            }
         });
 
         scrollbar.setOnTouchListener((v, event) -> {
@@ -125,7 +129,7 @@ public class FullscreenActivity extends AppCompatActivity {
                 case (MotionEvent.ACTION_DOWN):
                     Log.v(DEBUG_TAG, "Action was DOWN");
                     input.setFirstTouch();
-                    if(!gesture.isActivated())
+                    if (!gesture.isActivated())
                         input.resetMove((int) event.getX(), (int) event.getY());
                     return true;
                 case (MotionEvent.ACTION_MOVE):
@@ -155,21 +159,29 @@ public class FullscreenActivity extends AppCompatActivity {
         mapKeys();
     }
 
+    public void registerGestureListener() {
+        if (sensor != null) {
+            Log.v("sensor", "The sensor exist.");
+            if (gesture.isActivated())
+                sensorManager.registerListener(gesture, sensor, SensorManager.SENSOR_DELAY_GAME);
+        } else
+            Log.v("sensor", "The sensor not exist.");
+    }
+
+    public void unregisterGestureListener(){
+        sensorManager.unregisterListener(gesture);
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
-        if (sensor != null) {
-            Log.v("sensor", "The sensor exist.");
-            sensorManager.registerListener(gesture, sensor, SensorManager.SENSOR_DELAY_GAME);
-        } else
-            Log.v("sensor", "The sensor not exist.");
-
+        registerGestureListener();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        sensorManager.unregisterListener(gesture);
+        unregisterGestureListener();
     }
 
     private void mapKeys() {
